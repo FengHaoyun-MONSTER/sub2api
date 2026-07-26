@@ -52,7 +52,20 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.SERVICEIP }}
           SSH_USER: ${{ secrets.SERVICEUSER }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          echo "Deploy step is not configured yet."
-          echo "It will be added after the diagnostic results are reviewed."
-          exit 1
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            echo "::error::ADMIN_PASSWORD secret is not set. Add it before deploying."
+            exit 1
+          fi
+          # base64-encode admin creds so special chars survive the SSH command
+          # line; base64 blobs are not echoed (no set -x) and values stay masked.
+          ADMIN_EMAIL_B64=$(printf '%s' "$ADMIN_EMAIL" | base64 -w0)
+          ADMIN_PASSWORD_B64=$(printf '%s' "$ADMIN_PASSWORD" | base64 -w0)
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=20 \
+            "$SSH_USER@$SSH_HOST" \
+            "ADMIN_EMAIL_B64='$ADMIN_EMAIL_B64' ADMIN_PASSWORD_B64='$ADMIN_PASSWORD_B64' bash -s" \
+            < .github/deploy/deploy.sh
