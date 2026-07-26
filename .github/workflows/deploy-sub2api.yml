@@ -1,0 +1,58 @@
+name: Deploy Sub2API
+
+# Manually triggered deployment helper.
+# Uses repository secrets: SERVICEIP, SERVICEUSER, SSHPEM
+#   - mode=diagnose : read-only server inspection (safe, changes nothing)
+#   - mode=deploy   : run the deployment (added after diagnosis is reviewed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to run on the server'
+        required: true
+        default: 'diagnose'
+        type: choice
+        options:
+          - diagnose
+          - deploy
+
+concurrency:
+  group: deploy-sub2api
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        env:
+          SSH_KEY: ${{ secrets.SSHPEM }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Diagnose (read-only)
+        if: ${{ github.event.inputs.mode == 'diagnose' }}
+        env:
+          SSH_HOST: ${{ secrets.SERVICEIP }}
+          SSH_USER: ${{ secrets.SERVICEUSER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=20 \
+            "$SSH_USER@$SSH_HOST" 'bash -s' < .github/deploy/diagnose.sh
+
+      - name: Deploy
+        if: ${{ github.event.inputs.mode == 'deploy' }}
+        env:
+          SSH_HOST: ${{ secrets.SERVICEIP }}
+          SSH_USER: ${{ secrets.SERVICEUSER }}
+        run: |
+          echo "Deploy step is not configured yet."
+          echo "It will be added after the diagnostic results are reviewed."
+          exit 1
